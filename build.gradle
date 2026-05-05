@@ -3,6 +3,7 @@ plugins {
     id 'idea'
     id 'maven-publish'
     id 'net.minecraftforge.gradle' version '[6.0,6.2)'
+    id 'com.github.johnrengelman.shadow' version '8.1.1'
 }
 
 version = '1.0.0'
@@ -84,6 +85,38 @@ test {
     useJUnitPlatform()
 }
 
+configurations {
+    shadowLibs
+}
+
+// Only include the specific dependencies we need to shade
+dependencies {
+    shadowLibs 'com.github.ben-manes.caffeine:caffeine:3.1.8'
+    shadowLibs 'io.github.resilience4j:resilience4j-circuitbreaker:2.1.0'
+    shadowLibs 'io.github.resilience4j:resilience4j-retry:2.1.0'
+    shadowLibs 'io.github.resilience4j:resilience4j-ratelimiter:2.1.0'
+    shadowLibs 'io.github.resilience4j:resilience4j-bulkhead:2.1.0'
+    // commons-codec is already in Forge - no need to shade
+}
+
+shadowJar {
+    archiveClassifier = ''
+    configurations = [project.configurations.shadowLibs]
+    // Do NOT relocate - keep original package names
+    // Exclude transitive dependencies that conflict with Forge modules
+    dependencies {
+        exclude(dependency('com.google.errorprone:.*:.*'))
+        exclude(dependency('com.google.code.findbugs:.*:.*'))
+        exclude(dependency('org.checkerframework:.*:.*'))
+        exclude(dependency('com.google.j2objc:.*:.*'))
+        exclude(dependency('com.google.guava:.*:.*'))
+        exclude(dependency('org.slf4j:.*:.*'))
+        exclude(dependency('commons-codec:.*:.*'))
+        exclude(dependency('org.apache.commons:.*:.*'))
+    }
+}
+
+// Make jar produce the shadow jar output
 tasks.named('jar', Jar).configure {
     manifest {
         attributes([
@@ -95,14 +128,15 @@ tasks.named('jar', Jar).configure {
             'Implementation-Vendor': 'Steve AI'
         ])
     }
-
-    finalizedBy 'reobfJar'
+    // Use shadowJar as the final output
+    dependsOn 'shadowJar'
+    enabled = false
 }
 
 publishing {
     publications {
         mavenJava(MavenPublication) {
-            artifact jar
+            artifact shadowJar
         }
     }
     repositories {
@@ -111,4 +145,3 @@ publishing {
         }
     }
 }
-

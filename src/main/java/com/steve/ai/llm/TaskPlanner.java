@@ -41,9 +41,10 @@ public class TaskPlanner {
         String model = SteveConfig.OPENAI_MODEL.get();
         int maxTokens = SteveConfig.MAX_TOKENS.get();
         double temperature = SteveConfig.TEMPERATURE.get();
+        String baseUrl = SteveConfig.OPENAI_BASE_URL.get();
 
         // Create base async clients
-        AsyncLLMClient baseOpenAI = new AsyncOpenAIClient(apiKey, model, maxTokens, temperature);
+        AsyncLLMClient baseOpenAI = new AsyncOpenAIClient(apiKey, model, maxTokens, temperature, baseUrl);
         AsyncLLMClient baseGroq = new AsyncGroqClient(apiKey, "llama-3.1-8b-instant", 500, temperature);
         AsyncLLMClient baseGemini = new AsyncGeminiClient(apiKey, "gemini-1.5-flash", maxTokens, temperature);
 

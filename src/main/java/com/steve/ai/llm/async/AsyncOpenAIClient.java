@@ -51,7 +51,7 @@ import java.util.concurrent.CompletableFuture;
 public class AsyncOpenAIClient implements AsyncLLMClient {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(AsyncOpenAIClient.class);
-    private static final String OPENAI_API_URL = "https://api.openai.com/v1/chat/completions";
+    private static final String DEFAULT_OPENAI_API_URL = "https://api.openai.com/v1/chat/completions";
     private static final String PROVIDER_ID = "openai";
 
     private final HttpClient httpClient;
@@ -59,6 +59,7 @@ public class AsyncOpenAIClient implements AsyncLLMClient {
     private final String model;
     private final int maxTokens;
     private final double temperature;
+    private final String baseUrl;
 
     /**
      * Constructs an AsyncOpenAIClient.
@@ -70,6 +71,20 @@ public class AsyncOpenAIClient implements AsyncLLMClient {
      * @throws IllegalArgumentException if apiKey is null or empty
      */
     public AsyncOpenAIClient(String apiKey, String model, int maxTokens, double temperature) {
+        this(apiKey, model, maxTokens, temperature, null);
+    }
+
+    /**
+     * Constructs an AsyncOpenAIClient with custom base URL.
+     *
+     * @param apiKey      OpenAI API key (required)
+     * @param model       Model to use (e.g., "gpt-4o", "gpt-3.5-turbo")
+     * @param maxTokens   Maximum tokens in response (e.g., 1000)
+     * @param temperature Response randomness (0.0 - 2.0, lower = more deterministic)
+     * @param baseUrl     Custom base URL (e.g., "https://api.openai.com"), or null/empty for default
+     * @throws IllegalArgumentException if apiKey is null or empty
+     */
+    public AsyncOpenAIClient(String apiKey, String model, int maxTokens, double temperature, String baseUrl) {
         if (apiKey == null || apiKey.isEmpty()) {
             throw new IllegalArgumentException("OpenAI API key cannot be null or empty");
         }
@@ -78,13 +93,14 @@ public class AsyncOpenAIClient implements AsyncLLMClient {
         this.model = model;
         this.maxTokens = maxTokens;
         this.temperature = temperature;
+        this.baseUrl = (baseUrl != null && !baseUrl.isEmpty()) ? baseUrl : DEFAULT_OPENAI_API_URL;
 
         this.httpClient = HttpClient.newBuilder()
             .connectTimeout(Duration.ofSeconds(10))
             .build();
 
-        LOGGER.info("AsyncOpenAIClient initialized (model: {}, maxTokens: {}, temperature: {})",
-            model, maxTokens, temperature);
+        LOGGER.info("AsyncOpenAIClient initialized (model: {}, maxTokens: {}, temperature: {}, baseUrl: {})",
+            model, maxTokens, temperature, this.baseUrl);
     }
 
     @Override
@@ -94,8 +110,9 @@ public class AsyncOpenAIClient implements AsyncLLMClient {
         // Build request body
         String requestBody = buildRequestBody(prompt, params);
 
+        String apiUrl = baseUrl + "/v1/chat/completions";
         HttpRequest request = HttpRequest.newBuilder()
-            .uri(URI.create(OPENAI_API_URL))
+            .uri(URI.create(apiUrl))
             .header("Content-Type", "application/json")
             .header("Authorization", "Bearer " + apiKey)
             .POST(HttpRequest.BodyPublishers.ofString(requestBody))

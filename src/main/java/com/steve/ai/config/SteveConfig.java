@@ -9,6 +9,7 @@ public class SteveConfig {
     public static final ForgeConfigSpec.ConfigValue<String> OPENAI_MODEL;
     public static final ForgeConfigSpec.IntValue MAX_TOKENS;
     public static final ForgeConfigSpec.DoubleValue TEMPERATURE;
+    public static final ForgeConfigSpec.ConfigValue<String> OPENAI_BASE_URL;
     public static final ForgeConfigSpec.IntValue ACTION_TICK_DELAY;
     public static final ForgeConfigSpec.BooleanValue ENABLE_CHAT_RESPONSES;
     public static final ForgeConfigSpec.IntValue MAX_ACTIVE_STEVES;
@@ -41,7 +42,11 @@ public class SteveConfig {
         TEMPERATURE = builder
             .comment("Temperature for AI responses (0.0-2.0, lower is more deterministic)")
             .defineInRange("temperature", 0.7, 0.0, 2.0);
-        
+
+        OPENAI_BASE_URL = builder
+            .comment("Custom OpenAI API URL (leave empty for default)")
+            .define("baseUrl", "");
+
         builder.pop();
 
         builder.comment("Steve Behavior Configuration").push("behavior");

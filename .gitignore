@@ -16,7 +16,7 @@ out/
 run/
 
 # Config with API keys
-config/steve-common.toml
+run/config/steve-common.toml
 run/config/steve-common.toml
 
 # Media files (large binaries)
