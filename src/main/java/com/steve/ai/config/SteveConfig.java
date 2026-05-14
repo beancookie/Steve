@@ -12,6 +12,7 @@ public class SteveConfig {
     public static final ForgeConfigSpec.ConfigValue<String> OPENAI_BASE_URL;
     public static final ForgeConfigSpec.IntValue ACTION_TICK_DELAY;
     public static final ForgeConfigSpec.BooleanValue ENABLE_CHAT_RESPONSES;
+    public static final ForgeConfigSpec.BooleanValue CREATIVE_MODE;
     public static final ForgeConfigSpec.IntValue MAX_ACTIVE_STEVES;
 
     static {
@@ -58,7 +59,11 @@ public class SteveConfig {
         ENABLE_CHAT_RESPONSES = builder
             .comment("Allow Steves to respond in chat")
             .define("enableChatResponses", true);
-        
+
+        CREATIVE_MODE = builder
+            .comment("Creative mode - Steve has unlimited building materials (no mining needed)")
+            .define("creativeMode", true);
+
         MAX_ACTIVE_STEVES = builder
             .comment("Maximum number of Steves that can be active simultaneously")
             .defineInRange("maxActiveSteves", 10, 1, 50);

@@ -18,7 +18,10 @@
     
     # Allow Steves to respond in chat
     enableChatResponses = true
-    
+
+    # Creative mode - Steve has unlimited building materials (no mining needed)
+    creativeMode = true
+
     # Maximum number of Steves that can be active simultaneously
     maxActiveSteves = 10
 

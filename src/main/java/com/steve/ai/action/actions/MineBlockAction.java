@@ -6,6 +6,8 @@ import com.steve.ai.action.Task;
 import com.steve.ai.entity.SteveEntity;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.InteractionHand;
+import net.minecraft.world.entity.item.ItemEntity;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -174,10 +176,10 @@ public class MineBlockAction extends BaseAction {
         
         if (steve.level().getBlockState(currentTarget).getBlock() == targetBlock) {
             steve.teleportTo(currentTarget.getX() + 0.5, currentTarget.getY(), currentTarget.getZ() + 0.5);
-            
+
             steve.swing(InteractionHand.MAIN_HAND, true);
-            
-            steve.level().destroyBlock(currentTarget, true);
+
+            mineBlockToInventory(currentTarget);
             minedCount++;
             ticksSinceLastMine = 0; // Reset delay timer
             
@@ -267,20 +269,20 @@ public class MineBlockAction extends BaseAction {
         if (!centerState.isAir() && centerState.getBlock() != Blocks.BEDROCK) {
             steve.teleportTo(centerPos.getX() + 0.5, centerPos.getY(), centerPos.getZ() + 0.5);
             steve.swing(InteractionHand.MAIN_HAND, true);
-            steve.level().destroyBlock(centerPos, true);
+            mineBlockToInventory(centerPos);
             SteveMod.LOGGER.info("Steve '{}' mining tunnel at {}", steve.getSteveName(), centerPos);
         }
-        
+
         BlockState aboveState = steve.level().getBlockState(abovePos);
         if (!aboveState.isAir() && aboveState.getBlock() != Blocks.BEDROCK) {
             steve.swing(InteractionHand.MAIN_HAND, true);
-            steve.level().destroyBlock(abovePos, true);
+            mineBlockToInventory(abovePos);
         }
-        
+
         BlockState belowState = steve.level().getBlockState(belowPos);
         if (!belowState.isAir() && belowState.getBlock() != Blocks.BEDROCK) {
             steve.swing(InteractionHand.MAIN_HAND, true);
-            steve.level().destroyBlock(belowPos, true);
+            mineBlockToInventory(belowPos);
         }
         
         currentTunnelPos = currentTunnelPos.offset(miningDirectionX, 0, miningDirectionZ);
@@ -330,6 +332,47 @@ public class MineBlockAction extends BaseAction {
         SteveMod.LOGGER.info("Steve '{}' equipped iron pickaxe for mining", steve.getSteveName());
     }
 
+    // Block-to-item drop mapping (blocks that drop different items when mined)
+    private static final Map<Block, net.minecraft.world.item.Item> BLOCK_DROPS = new HashMap<>() {{
+        put(Blocks.STONE, net.minecraft.world.item.Items.COBBLESTONE);
+        put(Blocks.DEEPSLATE, net.minecraft.world.item.Items.COBBLESTONE);
+        put(Blocks.GRASS_BLOCK, net.minecraft.world.item.Items.DIRT);
+        put(Blocks.MYCELIUM, net.minecraft.world.item.Items.DIRT);
+        put(Blocks.PODZOL, net.minecraft.world.item.Items.DIRT);
+        put(Blocks.SNOW_BLOCK, net.minecraft.world.item.Items.SNOWBALL);
+    }};
+
+    /**
+     * Get the item dropped when a block is mined
+     */
+    private ItemStack getBlockDrop(Block block) {
+        net.minecraft.world.item.Item dropItem = BLOCK_DROPS.getOrDefault(block, block.asItem());
+        return new ItemStack(dropItem);
+    }
+
+    /**
+     * Mine a block and add it to Steve's inventory instead of dropping it
+     */
+    private void mineBlockToInventory(BlockPos pos) {
+        BlockState state = steve.level().getBlockState(pos);
+        Block block = state.getBlock();
+        ItemStack itemStack = getBlockDrop(block);
+        ItemStack remainder = steve.addItemToInventory(itemStack);
+        steve.level().destroyBlock(pos, false); // false = don't drop items
+
+        if (!remainder.isEmpty()) {
+            // Inventory full, drop the rest
+            net.minecraft.world.entity.item.ItemEntity itemEntity = new net.minecraft.world.entity.item.ItemEntity(
+                steve.level(), pos.getX() + 0.5, pos.getY() + 0.5, pos.getZ() + 0.5, remainder
+            );
+            steve.level().addFreshEntity(itemEntity);
+            SteveMod.LOGGER.warn("Steve '{}' inventory full, dropped {} at {}", steve.getSteveName(), remainder.getCount(), pos);
+        }
+
+        SteveMod.LOGGER.info("Steve '{}' mined {} -> inventory ({} total)", steve.getSteveName(),
+            block.getName().getString(), steve.getBlockCount(block));
+    }
+
     /**
      * Find the nearest player to determine mining direction
      */
@@ -370,6 +413,13 @@ public class MineBlockAction extends BaseAction {
             put("redstone", "redstone_ore");
             put("lapis", "lapis_ore");
             put("emerald", "emerald_ore");
+            // Material aliases for building
+            put("cobblestone", "stone");
+            put("oak_planks", "oak_log");
+            put("planks", "oak_log");
+            put("wood", "oak_log");
+            put("glass", "sand");
+            put("stone_bricks", "stone");
         }};
         
         if (resourceToOre.containsKey(blockName)) {

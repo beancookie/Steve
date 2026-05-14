@@ -4,6 +4,7 @@ import com.steve.ai.SteveMod;
 import com.steve.ai.action.ActionResult;
 import com.steve.ai.action.CollaborativeBuildManager;
 import com.steve.ai.action.Task;
+import com.steve.ai.config.SteveConfig;
 import com.steve.ai.entity.SteveEntity;
 import com.steve.ai.memory.StructureRegistry;
 import com.steve.ai.structure.BlockPlacement;
@@ -21,8 +22,12 @@ import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 
+import net.minecraft.world.item.ItemStack;
+
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 public class BuildStructureAction extends BaseAction {
     
@@ -145,7 +150,8 @@ public class BuildStructureAction extends BaseAction {
         buildPlan = tryLoadFromTemplate(structureType, clearPos);
         
         if (buildPlan == null) {
-            // Fall back to procedural generation            buildPlan = generateBuildPlan(structureType, clearPos, width, height, depth);
+            // Fall back to procedural generation
+            buildPlan = generateBuildPlan(structureType, clearPos, width, height, depth);
         } else {
             SteveMod.LOGGER.info("Loaded '{}' from NBT template with {} blocks", structureType, buildPlan.size());
         }
@@ -154,7 +160,24 @@ public class BuildStructureAction extends BaseAction {
             result = ActionResult.failure("Cannot generate build plan for: " + structureType);
             return;
         }
-        
+
+        // Check if Steve has enough materials (skip in creative mode)
+        boolean creative = SteveConfig.CREATIVE_MODE.get();
+        if (!creative) {
+            Map<Block, Integer> materialsNeeded = countMaterialsNeeded(buildPlan);
+            for (Map.Entry<Block, Integer> entry : materialsNeeded.entrySet()) {
+                Block block = entry.getKey();
+                int needed = entry.getValue();
+                int available = steve.getBlockCount(block);
+                if (available < needed) {
+                    SteveMod.LOGGER.warn("Steve '{}' needs {} {} but only has {} in inventory",
+                        steve.getSteveName(), needed, block.getName().getString(), available);
+                }
+            }
+        } else {
+            SteveMod.LOGGER.info("Steve '{}' building in CREATIVE MODE (unlimited materials)", steve.getSteveName());
+        }
+
         StructureRegistry.register(clearPos, width, height, depth, structureType);
         
         collaborativeBuild = CollaborativeBuildManager.findActiveBuild(structureType);
@@ -186,7 +209,8 @@ public class BuildStructureAction extends BaseAction {
         ticksRunning++;
         
         if (ticksRunning > MAX_TICKS) {
-            steve.setFlying(false); // Disable flying on timeout
+            steve.setFlying(false);
+            steve.setItemInHand(InteractionHand.MAIN_HAND, ItemStack.EMPTY);
             result = ActionResult.failure("Building timeout");
             return;
         }
@@ -195,6 +219,7 @@ public class BuildStructureAction extends BaseAction {
             if (collaborativeBuild.isComplete()) {
                 CollaborativeBuildManager.completeBuild(collaborativeBuild.structureId);
                 steve.setFlying(false);
+                steve.setItemInHand(InteractionHand.MAIN_HAND, ItemStack.EMPTY);
                 result = ActionResult.success("Built " + structureType + " collaboratively!");
                 return;
             }
@@ -212,18 +237,33 @@ public class BuildStructureAction extends BaseAction {
                 }
                 
                 BlockPos pos = placement.pos;
+
+                // Check material (skip in creative mode)
+                boolean creative = SteveConfig.CREATIVE_MODE.get();
+                if (!creative) {
+                    if (!steve.hasBlock(placement.block, 1)) {
+                        if (ticksRunning % 60 == 0) {
+                            SteveMod.LOGGER.warn("Steve '{}' has no {} to place! Mining more...",
+                                steve.getSteveName(), placement.block.getName().getString());
+                        }
+                        break; // Stop building, wait for materials
+                    }
+                    // Consume material from inventory
+                    steve.removeBlockFromInventory(placement.block, 1);
+                }
+
                 double distance = Math.sqrt(steve.blockPosition().distSqr(pos));
                 if (distance > 5) {
                     steve.teleportTo(pos.getX() + 2, pos.getY(), pos.getZ() + 2);
                     SteveMod.LOGGER.info("Steve '{}' teleported to block at {}", steve.getSteveName(), pos);
                 }
-                
+
                 steve.getLookControl().setLookAt(pos.getX() + 0.5, pos.getY() + 0.5, pos.getZ() + 0.5);
-                
+
                 steve.swing(InteractionHand.MAIN_HAND, true);
-                
-                BlockState existingState = steve.level().getBlockState(pos);
-                
+
+                steve.setItemInHand(InteractionHand.MAIN_HAND, new ItemStack(placement.block.asItem()));
+
                 BlockState blockState = placement.block.defaultBlockState();
                 steve.level().setBlock(pos, blockState, 3);
                 
@@ -255,14 +295,16 @@ public class BuildStructureAction extends BaseAction {
                     collaborativeBuild.participatingSteves.size());
             }
         } else {
-            steve.setFlying(false); // Disable flying on error
+            steve.setFlying(false);
+            steve.setItemInHand(InteractionHand.MAIN_HAND, ItemStack.EMPTY);
             result = ActionResult.failure("Build system error: not in collaborative mode");
         }
     }
 
     @Override
     protected void onCancel() {
-        steve.setFlying(false); // Disable flying when cancelled
+        steve.setFlying(false);
+        steve.setItemInHand(InteractionHand.MAIN_HAND, ItemStack.EMPTY);
         steve.getNavigation().stop();
     }
 
@@ -274,6 +316,17 @@ public class BuildStructureAction extends BaseAction {
     private List<BlockPlacement> generateBuildPlan(String type, BlockPos start, int width, int height, int depth) {
         // Delegate to centralized StructureGenerators utility
         return StructureGenerators.generate(type, start, width, height, depth, buildMaterials);
+    }
+
+    /**
+     * Count how many of each block type is needed for the build plan
+     */
+    private Map<Block, Integer> countMaterialsNeeded(List<BlockPlacement> plan) {
+        Map<Block, Integer> counts = new HashMap<>();
+        for (BlockPlacement bp : plan) {
+            counts.merge(bp.block, 1, Integer::sum);
+        }
+        return counts;
     }
     
     private Block getMaterial(int index) {

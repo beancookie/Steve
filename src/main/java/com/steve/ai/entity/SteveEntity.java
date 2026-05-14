@@ -3,11 +3,13 @@ package com.steve.ai.entity;
 import com.steve.ai.action.ActionExecutor;
 import com.steve.ai.memory.SteveMemory;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.ListTag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.syncher.EntityDataAccessor;
 import net.minecraft.network.syncher.EntityDataSerializers;
 import net.minecraft.network.syncher.SynchedEntityData;
 import net.minecraft.world.DifficultyInstance;
+import net.minecraft.world.SimpleContainer;
 import net.minecraft.world.entity.*;
 import net.minecraft.world.entity.ai.attributes.AttributeSupplier;
 import net.minecraft.world.entity.ai.attributes.Attributes;
@@ -15,8 +17,10 @@ import net.minecraft.world.entity.ai.goal.FloatGoal;
 import net.minecraft.world.entity.ai.goal.LookAtPlayerGoal;
 import net.minecraft.world.entity.ai.goal.RandomLookAroundGoal;
 import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.ServerLevelAccessor;
+import net.minecraft.world.level.block.Block;
 import org.jetbrains.annotations.Nullable;
 
 public class SteveEntity extends PathfinderMob {
@@ -26,6 +30,7 @@ public class SteveEntity extends PathfinderMob {
     private String steveName;
     private SteveMemory memory;
     private ActionExecutor actionExecutor;
+    private SimpleContainer inventory;
     private int tickCounter = 0;
     private boolean isFlying = false;
     private boolean isInvulnerable = false;
@@ -35,8 +40,9 @@ public class SteveEntity extends PathfinderMob {
         this.steveName = "Steve";
         this.memory = new SteveMemory(this);
         this.actionExecutor = new ActionExecutor(this);
+        this.inventory = new SimpleContainer(36); // 36 slots like a player
         this.setCustomNameVisible(true);
-        
+
         this.isInvulnerable = true;
         this.setInvulnerable(true);
     }
@@ -89,14 +95,87 @@ public class SteveEntity extends PathfinderMob {
         return this.actionExecutor;
     }
 
+    public SimpleContainer getInventory() {
+        return this.inventory;
+    }
+
+    /**
+     * Add items to inventory. Returns the remainder that didn't fit.
+     */
+    public ItemStack addItemToInventory(ItemStack stack) {
+        return this.inventory.addItem(stack);
+    }
+
+    /**
+     * Check if inventory contains at least 'count' items of the given block type.
+     */
+    public boolean hasBlock(Block block, int count) {
+        ItemStack target = new ItemStack(block.asItem());
+        int total = 0;
+        for (int i = 0; i < inventory.getContainerSize(); i++) {
+            ItemStack slot = inventory.getItem(i);
+            if (ItemStack.isSameItemSameTags(slot, target)) {
+                total += slot.getCount();
+                if (total >= count) return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Get total count of a specific block item in inventory.
+     */
+    public int getBlockCount(Block block) {
+        ItemStack target = new ItemStack(block.asItem());
+        int total = 0;
+        for (int i = 0; i < inventory.getContainerSize(); i++) {
+            ItemStack slot = inventory.getItem(i);
+            if (ItemStack.isSameItemSameTags(slot, target)) {
+                total += slot.getCount();
+            }
+        }
+        return total;
+    }
+
+    /**
+     * Remove 'count' items of the given block from inventory. Returns true if successful.
+     */
+    public boolean removeBlockFromInventory(Block block, int count) {
+        if (!hasBlock(block, count)) return false;
+
+        ItemStack target = new ItemStack(block.asItem());
+        int remaining = count;
+        for (int i = 0; i < inventory.getContainerSize() && remaining > 0; i++) {
+            ItemStack slot = inventory.getItem(i);
+            if (ItemStack.isSameItemSameTags(slot, target)) {
+                int take = Math.min(remaining, slot.getCount());
+                slot.shrink(take);
+                remaining -= take;
+            }
+        }
+        return true;
+    }
+
     @Override
     public void addAdditionalSaveData(CompoundTag tag) {
         super.addAdditionalSaveData(tag);
         tag.putString("SteveName", this.steveName);
-        
+
         CompoundTag memoryTag = new CompoundTag();
         this.memory.saveToNBT(memoryTag);
         tag.put("Memory", memoryTag);
+
+        ListTag inventoryTag = new ListTag();
+        for (int i = 0; i < inventory.getContainerSize(); i++) {
+            ItemStack stack = inventory.getItem(i);
+            if (!stack.isEmpty()) {
+                CompoundTag slotTag = new CompoundTag();
+                slotTag.putByte("Slot", (byte) i);
+                stack.save(slotTag);
+                inventoryTag.add(slotTag);
+            }
+        }
+        tag.put("Inventory", inventoryTag);
     }
 
     @Override
@@ -105,9 +184,21 @@ public class SteveEntity extends PathfinderMob {
         if (tag.contains("SteveName")) {
             this.setSteveName(tag.getString("SteveName"));
         }
-        
+
         if (tag.contains("Memory")) {
             this.memory.loadFromNBT(tag.getCompound("Memory"));
+        }
+
+        if (tag.contains("Inventory")) {
+            ListTag inventoryTag = tag.getList("Inventory", 10);
+            this.inventory = new SimpleContainer(36);
+            for (int i = 0; i < inventoryTag.size(); i++) {
+                CompoundTag slotTag = inventoryTag.getCompound(i);
+                int slot = slotTag.getByte("Slot") & 255;
+                if (slot < inventory.getContainerSize()) {
+                    inventory.setItem(slot, ItemStack.of(slotTag));
+                }
+            }
         }
     }
 
@@ -130,6 +221,15 @@ public class SteveEntity extends PathfinderMob {
     @Override
     protected void dropCustomDeathLoot(net.minecraft.world.damagesource.DamageSource source, int looting, boolean recentlyHit) {
         super.dropCustomDeathLoot(source, looting, recentlyHit);
+        if (inventory != null) {
+            for (int i = 0; i < inventory.getContainerSize(); i++) {
+                ItemStack stack = inventory.getItem(i);
+                if (!stack.isEmpty()) {
+                    this.spawnAtLocation(stack);
+                }
+            }
+            inventory.clearContent();
+        }
     }
 
     public void setFlying(boolean flying) {

@@ -197,15 +197,23 @@ public class CollaborativeBuildManager {
         
         BuildSection section = build.sections.get(sectionIndex);
         BlockPlacement block = section.getNextBlock();
-        
+
         if (block == null) {
-            if (sectionIndex != null) {
-                section = build.sections.get(sectionIndex);
-                block = section.getNextBlock();
-                if (block != null) {                }
+            // Section complete - try to find another section that needs help
+            for (int i = 0; i < build.sections.size(); i++) {
+                BuildSection otherSection = build.sections.get(i);
+                if (!otherSection.isComplete()) {
+                    build.steveToSectionMap.put(steveName, i);
+                    block = otherSection.getNextBlock();
+                    if (block != null) {
+                        SteveMod.LOGGER.info("Steve '{}' finished section, now helping with {} ({} remaining)",
+                            steveName, otherSection.sectionName, otherSection.getTotalBlocks() - otherSection.getBlocksPlaced());
+                        return block;
+                    }
+                }
             }
         }
-        
+
         return block;
     }
     
