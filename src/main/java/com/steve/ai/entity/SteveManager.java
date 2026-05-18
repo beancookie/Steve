@@ -57,6 +57,20 @@ public class SteveManager {
         return activeSteves.get(name);
     }
 
+    /**
+     * Register an existing Steve entity (loaded from save) with the manager.
+     */
+    public void registerExistingSteve(SteveEntity steve) {
+        String name = steve.getSteveName();
+        if (activeSteves.containsKey(name)) {
+            SteveMod.LOGGER.warn("Steve '{}' already registered, skipping", name);
+            return;
+        }
+        activeSteves.put(name, steve);
+        stevesByUUID.put(steve.getUUID(), steve);
+        SteveMod.LOGGER.info("Registered existing Steve: {} (UUID: {})", name, steve.getUUID());
+    }
+
     public SteveEntity getSteve(UUID uuid) {
         return stevesByUUID.get(uuid);
     }
@@ -73,10 +87,14 @@ public class SteveManager {
     public void clearAllSteves() {
         SteveMod.LOGGER.info("Clearing {} Steve entities", activeSteves.size());
         for (SteveEntity steve : activeSteves.values()) {
+            SteveMod.LOGGER.info("Removing Steve '{}' (UUID: {}, removed: {})",
+                steve.getSteveName(), steve.getUUID(), steve.isRemoved());
             steve.discard();
+            SteveMod.LOGGER.info("After discard - removed: {}", steve.isRemoved());
         }
         activeSteves.clear();
-        stevesByUUID.clear();    }
+        stevesByUUID.clear();
+    }
 
     public Collection<SteveEntity> getAllSteves() {
         return Collections.unmodifiableCollection(activeSteves.values());
