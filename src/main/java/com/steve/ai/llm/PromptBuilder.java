@@ -3,6 +3,7 @@ package com.steve.ai.llm;
 import com.steve.ai.config.SteveConfig;
 import com.steve.ai.entity.SteveEntity;
 import com.steve.ai.memory.WorldKnowledge;
+import com.steve.ai.structure.StructureTemplateLoader;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.SimpleContainer;
 import net.minecraft.world.item.ItemStack;
@@ -10,6 +11,7 @@ import net.minecraft.world.item.ItemStack;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 public class PromptBuilder {
     
@@ -18,6 +20,11 @@ public class PromptBuilder {
         String materialRule = creative
             ? "10. CREATIVE MODE: Unlimited materials. NEVER mine before building. Build directly."
             : "10. SURVIVAL MODE: Steve has a 36-slot inventory. Mined blocks go into inventory. Building consumes from inventory. If inventory is empty, mine materials first before building.";
+
+        // Dynamically load available NBT template names
+        List<String> nbtTemplates = StructureTemplateLoader.getAvailableStructures();
+        String nbtList = nbtTemplates.isEmpty() ? "(none)" : String.join(", ", nbtTemplates);
+        String proceduralList = "castle, tower, barn, modern";
 
         return """
             You are a Minecraft AI agent. Respond ONLY with valid JSON, no extra text.
@@ -34,14 +41,13 @@ public class PromptBuilder {
 
             RULES:
             1. ALWAYS use "hostile" for attack target (mobs, monsters, creatures)
-            2. STRUCTURE OPTIONS: house, oldhouse, powerplant, castle, tower, barn, modern
-            3. house/oldhouse/powerplant = pre-built NBT templates (auto-size)
-            4. castle/tower/barn/modern = procedural (castle=14x10x14, tower=6x6x16, barn=12x8x14)
-            5. Use 2-3 block types: oak_planks, cobblestone, glass_pane, stone_bricks
-            6. NO extra pathfind tasks unless explicitly requested
-            7. Keep reasoning under 15 words
-            8. COLLABORATIVE BUILDING: Multiple Steves can work on same structure simultaneously
-            9. MINING: Can mine any ore (iron, diamond, coal, etc)
+            2. NBT TEMPLATES (pre-built, auto-size): %s
+            3. PROCEDURAL STRUCTURES: %s (castle=14x10x14, tower=6x6x16, barn=12x8x14)
+            4. Use 2-3 block types: oak_planks, cobblestone, glass_pane, stone_bricks
+            5. NO extra pathfind tasks unless explicitly requested
+            6. Keep reasoning under 15 words
+            7. COLLABORATIVE BUILDING: Multiple Steves can work on same structure simultaneously
+            8. MINING: Can mine any ore (iron, diamond, coal, etc)
             %s
 
             EXAMPLES (copy these formats exactly):
@@ -65,7 +71,7 @@ public class PromptBuilder {
             {"reasoning": "Player needs me", "plan": "Follow player", "tasks": [{"action": "follow", "parameters": {"player": "USE_NEARBY_PLAYER_NAME"}}]}
 
             CRITICAL: Output ONLY valid JSON. No markdown, no explanations, no line breaks in JSON.
-            """.formatted(materialRule);
+            """.formatted(nbtList, proceduralList, materialRule);
     }
 
     public static String buildUserPrompt(SteveEntity steve, String command, WorldKnowledge worldKnowledge) {

@@ -64,6 +64,8 @@ public class TaskPlanner {
             
             String provider = SteveConfig.AI_PROVIDER.get().toLowerCase();
             SteveMod.LOGGER.info("Requesting AI plan for Steve '{}' using {}: {}", steve.getSteveName(), provider, command);
+            SteveMod.LOGGER.debug("=== SYSTEM PROMPT ===\n{}", systemPrompt);
+            SteveMod.LOGGER.debug("=== USER PROMPT ===\n{}", userPrompt);
             
             String response = getAIResponse(provider, systemPrompt, userPrompt);
             
@@ -130,6 +132,8 @@ public class TaskPlanner {
             String provider = SteveConfig.AI_PROVIDER.get().toLowerCase();
             SteveMod.LOGGER.info("[Async] Requesting AI plan for Steve '{}' using {}: {}",
                 steve.getSteveName(), provider, command);
+            SteveMod.LOGGER.debug("=== SYSTEM PROMPT ===\n{}", systemPrompt);
+            SteveMod.LOGGER.debug("=== USER PROMPT ===\n{}", userPrompt);
 
             // Build params map
             Map<String, Object> params = Map.of(
